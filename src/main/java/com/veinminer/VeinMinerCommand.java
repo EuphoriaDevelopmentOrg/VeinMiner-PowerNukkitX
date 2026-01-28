@@ -55,23 +55,18 @@ public class VeinMinerCommand extends Command {
     
     @Override
     public boolean execute(CommandSender sender, String label, String[] args) {
-        // Always return true to prevent usage message
         try {
-            plugin.getLogger().info("Command executed by " + sender.getName() + " with args: " + String.join(", ", args));
-            
             if (!sender.hasPermission("veinminer.command")) {
                 sender.sendMessage(TextFormat.RED + "You don't have permission to use this command.");
                 return true;
             }
             
             if (args.length == 0) {
-                plugin.getLogger().info("Showing detailed help to " + sender.getName());
                 sendDetailedHelp(sender);
                 return true;
             }
             
             String subcommand = args[0].toLowerCase();
-            plugin.getLogger().info("Subcommand: " + subcommand);
             
             switch (subcommand) {
                 case "help":
@@ -223,56 +218,10 @@ public class VeinMinerCommand extends Command {
         }
     }
     
-    private void sendMainHelp(CommandSender sender) {
-        sender.sendMessage(TextFormat.GOLD + "========== " + TextFormat.BOLD + "VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " ==========");
-        sender.sendMessage(TextFormat.YELLOW + "Version: " + TextFormat.WHITE + plugin.getDescription().getVersion());
-        sender.sendMessage("");
-        sender.sendMessage(TextFormat.AQUA + "Quick Commands:");
-        if (sender.hasPermission("veinminer.toggle")) {
-            sender.sendMessage(TextFormat.YELLOW + "  /vm toggle" + TextFormat.GRAY + " - Toggle vein mining on/off");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm status" + TextFormat.GRAY + " - Check your current status");
-        }
-        if (sender.hasPermission("veinminer.stats")) {
-            sender.sendMessage(TextFormat.YELLOW + "  /vm stats" + TextFormat.GRAY + " - View your statistics");
-        }
-        if (sender.hasPermission("veinminer.reload")) {
-            sender.sendMessage(TextFormat.YELLOW + "  /vm reload" + TextFormat.GRAY + " - Reload configuration");
-        }
-        sender.sendMessage("");
-        sender.sendMessage(TextFormat.GRAY + "Type " + TextFormat.WHITE + "/vm help" + TextFormat.GRAY + " for detailed information.");
-        sender.sendMessage(TextFormat.GOLD + "====================================");
-    }
-    
     private void sendDetailedHelp(CommandSender sender) {
-        sender.sendMessage(TextFormat.GOLD + "===== VeinMiner Help =====");
-        sender.sendMessage("");
-        
-        if (sender.hasPermission("veinminer.toggle")) {
-            sender.sendMessage(TextFormat.AQUA + "Toggle Commands:");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm toggle " + TextFormat.GRAY + "- Toggle on/off");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm on " + TextFormat.GRAY + "- Enable");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm off " + TextFormat.GRAY + "- Disable");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm status " + TextFormat.GRAY + "- Check status");
-            sender.sendMessage("");
-        }
-        
-        if (sender.hasPermission("veinminer.stats")) {
-            sender.sendMessage(TextFormat.AQUA + "Statistics:");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm stats " + TextFormat.GRAY + "- View your stats");
-            sender.sendMessage("");
-        }
-        
-        if (sender.hasPermission("veinminer.reload")) {
-            sender.sendMessage(TextFormat.AQUA + "Admin:");
-            sender.sendMessage(TextFormat.YELLOW + "  /vm reload " + TextFormat.GRAY + "- Reload config");
-            sender.sendMessage("");
-        }
-        
-        sender.sendMessage(TextFormat.AQUA + "How to Use:");
-        sender.sendMessage(TextFormat.WHITE + "  Sneak while mining ores or logs");
-        sender.sendMessage(TextFormat.WHITE + "  to break entire veins at once!");
-        sender.sendMessage("");
-        sender.sendMessage(TextFormat.GRAY + "Aliases: /veinminer, /vm, /vmine");
+        sender.sendMessage(TextFormat.GOLD + "VeinMiner Help");
+        sender.sendMessage(TextFormat.YELLOW + "Commands: /vm toggle, /vm stats, /vm reload");
+        sender.sendMessage(TextFormat.GRAY + "Use /vm <command> for more info");
     }
     
     public boolean isDisabled(Player player) {

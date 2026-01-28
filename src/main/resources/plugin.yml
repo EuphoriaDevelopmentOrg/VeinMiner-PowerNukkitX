@@ -1,12 +1,12 @@
 name: VeinMiner
 main: com.veinminer.VeinMinerPlugin
-version: "1.0.3"
+version: "1.0.4"
 api: "2.0.0"
 load: POSTWORLD
 author: Rep Graphics
 authors: ["Rep Graphics", "Euphoria Development"]
 description: Chain/vein mining plugin for PowerNukkitX
-website: https://github.com/powernukkitx
+website: https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX
 
 permissions:
   veinminer.*:

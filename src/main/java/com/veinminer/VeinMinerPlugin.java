@@ -62,7 +62,7 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         
         // Fancy startup message
         this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
-        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + " VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.3 ⚯");
+        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + " VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.4 ⚯");
         this.getLogger().info(TextFormat.GREEN + "  ✓ Plugin Enabled Successfully!");
         this.getLogger().info(TextFormat.YELLOW + "  » Max blocks per vein: " + TextFormat.WHITE + MAX_BLOCKS);
         this.getLogger().info(TextFormat.YELLOW + "  » Auto-pickup: " + TextFormat.WHITE + (autoPickupEnabled ? "Enabled" : "Disabled"));
@@ -106,7 +106,7 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         
         // Load update checker
         updateCheckerEnabled = config.getBoolean("update-checker.enabled", true);
-        githubRepo = config.getString("update-checker.repository", "YourUsername/VeinMiner");
+        githubRepo = config.getString("update-checker.repository", "EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX");
         
         // Load messages
         inventoryFullMessage = config.getString("messages.inventory-full", "&eInventory full! {count} items were {action}.");
@@ -487,10 +487,19 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                             if (isNewerVersion(cleanCurrentVersion, latestVersion)) {
                                 getServer().getScheduler().scheduleTask(VeinMinerPlugin.this, () -> {
                                     getLogger().warning(TextFormat.YELLOW + "===========================================");
-                                    getLogger().warning(TextFormat.YELLOW + "A new version of VeinMiner is available!");
+                                    getLogger().warning(TextFormat.YELLOW + "A new update for VeinMiner is available!");
                                     getLogger().warning(TextFormat.YELLOW + "Current: " + TextFormat.RED + cleanCurrentVersion + TextFormat.YELLOW + " | Latest: " + TextFormat.GREEN + latestVersion);
                                     getLogger().warning(TextFormat.YELLOW + "Download: " + TextFormat.AQUA + "https://github.com/" + githubRepo + "/releases");
                                     getLogger().warning(TextFormat.YELLOW + "===========================================");
+                                    
+                                    // Notify online ops/admins
+                                    for (Player onlinePlayer : getServer().getOnlinePlayers().values()) {
+                                        if (onlinePlayer.isOp()) {
+                                            onlinePlayer.sendMessage(TextFormat.YELLOW + "[VeinMiner] " + TextFormat.GOLD + "A new update is available!");
+                                            onlinePlayer.sendMessage(TextFormat.YELLOW + "Current: " + TextFormat.RED + cleanCurrentVersion + TextFormat.YELLOW + " | Latest: " + TextFormat.GREEN + latestVersion);
+                                            onlinePlayer.sendMessage(TextFormat.GRAY + "Download: " + TextFormat.AQUA + "https://github.com/" + githubRepo + "/releases");
+                                        }
+                                    }
                                 });
                             } else {
                                 if (loggingEnabled) {
