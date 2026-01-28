@@ -1,0 +1,88 @@
+# VeinMiner Configuration File
+
+# Maximum number of blocks to mine in a single vein
+# Set to -1 for unlimited (not recommended)
+max-blocks: 64
+
+# Require player to be sneaking to activate vein mining
+sneak-required: true
+
+# Tool durability settings
+tool-durability:
+  # Apply durability damage to tools when vein mining
+  enabled: true
+  # Durability multiplier (1.0 = normal, 0.5 = half damage, 2.0 = double damage)
+  multiplier: 1.0
+
+# Auto-pickup settings
+auto-pickup:
+  # Automatically add mined items to player inventory
+  enabled: true
+  # What to do when inventory is full: "drop" or "delete"
+  full-inventory-action: "drop"
+
+# Console logging settings
+logging:
+  # Enable verbose console logging
+  enabled: true
+  # Log when vein mining is activated
+  log-vein-mining: true
+  # Log configuration loading details
+  log-config-loading: true
+
+# Block categories that can be vein mined
+# Set to false to disable vein mining for that category
+enabled-blocks:
+  ores: true
+  logs: true
+  leaves: true
+
+# Specific blocks (set individual blocks to false to disable)
+# Use block names from PowerNukkitX Block class
+blocks:
+  # Ores
+  COAL_ORE: true
+  IRON_ORE: true
+  GOLD_ORE: true
+  DIAMOND_ORE: true
+  EMERALD_ORE: true
+  LAPIS_ORE: true
+  REDSTONE_ORE: true
+  QUARTZ_ORE: true
+  COPPER_ORE: true
+  DEEPSLATE_COAL_ORE: true
+  DEEPSLATE_IRON_ORE: true
+  DEEPSLATE_GOLD_ORE: true
+  DEEPSLATE_DIAMOND_ORE: true
+  DEEPSLATE_EMERALD_ORE: true
+  DEEPSLATE_LAPIS_ORE: true
+  DEEPSLATE_REDSTONE_ORE: true
+  DEEPSLATE_COPPER_ORE: true
+  
+  # Logs
+  LOG: true
+  LOG2: true
+  WOOD: true
+  WOOD2: true
+  MANGROVE_LOG: true
+  CHERRY_LOG: true
+  CRIMSON_STEM: true
+  WARPED_STEM: true
+  
+  # Leaves
+  LEAVES: true
+  LEAVES2: true
+  MANGROVE_LEAVES: true
+  CHERRY_LEAVES: true
+
+# Messages
+messages:
+  # Message shown when vein mining is activated (use {count} for block count)
+  # Set to empty string to disable
+  vein-mined: "&6Vein Mining: &f{count} blocks"
+  
+  # Message when tool breaks
+  tool-broken: "&cYour tool has broken!"
+  
+  # Message when inventory is full (use {count} for deleted items)
+  inventory-full: "&eInventory full! {count} items were {action}."
