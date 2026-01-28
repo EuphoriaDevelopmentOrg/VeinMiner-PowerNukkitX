@@ -1,7 +1,8 @@
 # VeinMiner Configuration File
+# Plugin version: 1.0.4
 
 # Maximum number of blocks to mine in a single vein
-# Set to -1 for unlimited (not recommended)
+# Must be a positive integer
 max-blocks: 64
 
 # Require player to be sneaking to activate vein mining
@@ -17,6 +18,7 @@ tool-durability:
   # Apply durability damage to tools when vein mining
   enabled: true
   # Durability multiplier (1.0 = normal, 0.5 = half damage, 2.0 = double damage)
+  # Higher values make tools break faster during vein mining
   multiplier: 1.0
 
 # Auto-pickup settings
@@ -57,14 +59,16 @@ update-checker:
   repository: "EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX"
 
 # Block categories that can be vein mined
-# Set to false to disable vein mining for that category
+# Set to false to disable vein mining for that entire category
 enabled-blocks:
-  ores: true
-  logs: true
-  leaves: true
+  ores: true    # All ore blocks (coal, iron, diamond, etc.)
+  logs: true    # All log and stem blocks
+  leaves: true  # All leaf blocks
 
-# Specific blocks (set individual blocks to false to disable)
-# Use block names from PowerNukkitX Block class
+# Fine-grained control: Disable specific block types
+# These override the category settings above
+# Set individual blocks to false to disable them
+# Note: Block names correspond to PowerNukkitX internal names
 blocks:
   # Ores
   COAL_ORE: true
@@ -76,6 +80,10 @@ blocks:
   REDSTONE_ORE: true
   QUARTZ_ORE: true
   COPPER_ORE: true
+  NETHER_GOLD_ORE: true
+  ANCIENT_DEBRIS: true  # Netherite ancient debris
+  
+  # Deepslate variants
   DEEPSLATE_COAL_ORE: true
   DEEPSLATE_IRON_ORE: true
   DEEPSLATE_GOLD_ORE: true
@@ -85,19 +93,19 @@ blocks:
   DEEPSLATE_REDSTONE_ORE: true
   DEEPSLATE_COPPER_ORE: true
   
-  # Logs
-  LOG: true
-  LOG2: true
-  WOOD: true
-  WOOD2: true
+  # Logs (LOG and LOG2 cover multiple wood types)
+  LOG: true          # Oak, Spruce, Birch, Jungle
+  LOG2: true         # Acacia, Dark Oak
+  WOOD: true         # Alternative log format
+  WOOD2: true        # Alternative log format  
   MANGROVE_LOG: true
   CHERRY_LOG: true
   CRIMSON_STEM: true
   WARPED_STEM: true
   
-  # Leaves
-  LEAVES: true
-  LEAVES2: true
+  # Leaves (LEAVES and LEAVES2 cover multiple types)
+  LEAVES: true       # Oak, Spruce, Birch, Jungle
+  LEAVES2: true      # Acacia, Dark Oak
   MANGROVE_LEAVES: true
   CHERRY_LEAVES: true
 

@@ -5,6 +5,9 @@ import cn.nukkit.command.Command;
 import cn.nukkit.command.CommandSender;
 import cn.nukkit.command.data.CommandEnum;
 import cn.nukkit.command.data.CommandParameter;
+import cn.nukkit.event.EventHandler;
+import cn.nukkit.event.Listener;
+import cn.nukkit.event.player.PlayerQuitEvent;
 import cn.nukkit.utils.TextFormat;
 
 import java.util.ArrayList;
@@ -12,8 +15,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class VeinMinerCommand extends Command {
+/**
+ * Command handler for VeinMiner
+ * Implements Listener to clean up player data on quit (prevents memory leaks)
+ */
+public class VeinMinerCommand extends Command implements Listener {
     
     private final VeinMinerPlugin plugin;
     private final Set<UUID> disabledPlayers;
@@ -21,8 +29,11 @@ public class VeinMinerCommand extends Command {
     public VeinMinerCommand(VeinMinerPlugin plugin) {
         super("veinminer", "Mine entire veins at once! Use /vm help for more info", "/veinminer", new String[]{"vm", "vmine"});
         this.plugin = plugin;
-        this.disabledPlayers = new HashSet<>();
+        this.disabledPlayers = ConcurrentHashMap.newKeySet(); // Thread-safe set
         // Don't set permission here - let plugin.yml handle it
+        
+        // Register this as a listener for cleanup
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
         
         // Set up command parameters for proper display
         this.commandParameters.clear();
@@ -30,6 +41,15 @@ public class VeinMinerCommand extends Command {
             CommandParameter.newEnum("action", true, new CommandEnum("VeinMinerAction", 
                 new String[]{"help", "reload", "stats", "toggle", "on", "off", "status"}))
         });
+    }
+    
+    /**
+     * Clean up player data when they disconnect to prevent memory leaks
+     */
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        disabledPlayers.remove(uuid);
     }
     
     /**
@@ -224,7 +244,15 @@ public class VeinMinerCommand extends Command {
         sender.sendMessage(TextFormat.GRAY + "Use /vm <command> for more info");
     }
     
+    /**
+     * Check if vein mining is disabled for a player
+     * @param player The player to check
+     * @return true if disabled
+     */
     public boolean isDisabled(Player player) {
+        if (player == null) {
+            return false;
+        }
         return disabledPlayers.contains(player.getUniqueId());
     }
 }
