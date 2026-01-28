@@ -7,6 +7,11 @@ max-blocks: 64
 # Require player to be sneaking to activate vein mining
 sneak-required: true
 
+# World restrictions
+disabled-worlds:
+  - "example_world"
+  # Add world names where vein mining should be disabled
+
 # Tool durability settings
 tool-durability:
   # Apply durability damage to tools when vein mining
@@ -29,6 +34,27 @@ logging:
   log-vein-mining: true
   # Log configuration loading details
   log-config-loading: true
+
+# Visual and sound effects
+effects:
+  # Show particle effects on mined blocks
+  particles: true
+  # Play sound when vein mining
+  sounds: true
+
+# Statistics tracking
+statistics:
+  # Track player vein mining stats
+  enabled: true
+  # Save stats to file
+  save-to-file: true
+
+# Update checker
+update-checker:
+  # Check for updates on startup
+  enabled: true
+  # GitHub repository (owner/repo) Leave as it is for default
+  repository: "EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX"
 
 # Block categories that can be vein mined
 # Set to false to disable vein mining for that category
@@ -86,3 +112,10 @@ messages:
   
   # Message when inventory is full (use {count} for deleted items)
   inventory-full: "&eInventory full! {count} items were {action}."
+  
+  # Messages for commands
+  reload-success: "&aVeinMiner configuration reloaded!"
+  stats-header: "&6&l=== VeinMiner Statistics ==="
+  stats-line: "&e{stat}: &f{value}"
+  toggle-enabled: "&aVeinMiner enabled!"
+  toggle-disabled: "&cVeinMiner disabled!"

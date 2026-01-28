@@ -7,10 +7,16 @@ import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.block.BlockBreakEvent;
 import cn.nukkit.item.Item;
+import cn.nukkit.level.ParticleEffect;
+import cn.nukkit.level.Sound;
 import cn.nukkit.plugin.PluginBase;
 import cn.nukkit.utils.Config;
 import cn.nukkit.utils.TextFormat;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.*;
 
 public class VeinMinerPlugin extends PluginBase implements Listener {
@@ -23,6 +29,15 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
     private boolean loggingEnabled;
     private boolean logVeinMining;
     private boolean logConfigLoading;
+    
+    // New features
+    private List<String> disabledWorlds;
+    private boolean particlesEnabled;
+    private boolean soundsEnabled;
+    private boolean updateCheckerEnabled;
+    private String githubRepo;
+    private StatisticsTracker statsTracker;
+    private VeinMinerCommand veinMinerCommand;
 
     @Override
     public void onEnable() {
@@ -35,22 +50,38 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         // Load vein blocks
         loadVeinBlocks();
         
+        // Initialize statistics tracker
+        statsTracker = new StatisticsTracker(this);
+        
+        // Register command
+        veinMinerCommand = new VeinMinerCommand(this);
+        this.getServer().getCommandMap().register("veinminer", veinMinerCommand);
+        
         // Register events
         this.getServer().getPluginManager().registerEvents(this, this);
         
         // Fancy startup message
         this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
-        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + "VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.1 ⚯");
+        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + "VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.2 ⚯");
         this.getLogger().info(TextFormat.GREEN + "  ✓ Plugin Enabled Successfully!");
         this.getLogger().info(TextFormat.YELLOW + "  » Max blocks per vein: " + TextFormat.WHITE + MAX_BLOCKS);
         this.getLogger().info(TextFormat.YELLOW + "  » Auto-pickup: " + TextFormat.WHITE + (autoPickupEnabled ? "Enabled" : "Disabled"));
         this.getLogger().info(TextFormat.YELLOW + "  » Sneak required: " + TextFormat.WHITE + "Yes");
         this.getLogger().info(TextFormat.YELLOW + "  » Vein blocks loaded: " + TextFormat.WHITE + veinBlocks.size());
         this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
+        
+        // Check for updates
+        if (updateCheckerEnabled) {
+            checkForUpdates();
+        }
     }
     
     @Override
     public void onDisable() {
+        // Save statistics
+        if (statsTracker != null) {
+            statsTracker.saveStats();
+        }
         this.getLogger().info(TextFormat.RED + "VeinMiner plugin disabled!");
     }
     
@@ -66,6 +97,17 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         logVeinMining = config.getBoolean("logging.log-vein-mining", true);
         logConfigLoading = config.getBoolean("logging.log-config-loading", true);
         
+        // Load world restrictions
+        disabledWorlds = config.getStringList("disabled-worlds");
+        
+        // Load effects
+        particlesEnabled = config.getBoolean("effects.particles", true);
+        soundsEnabled = config.getBoolean("effects.sounds", true);
+        
+        // Load update checker
+        updateCheckerEnabled = config.getBoolean("update-checker.enabled", true);
+        githubRepo = config.getString("update-checker.repository", "YourUsername/VeinMiner");
+        
         // Load messages
         inventoryFullMessage = config.getString("messages.inventory-full", "&eInventory full! {count} items were {action}.");
         
@@ -73,7 +115,19 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
             this.getLogger().info(TextFormat.GREEN + "[Config] Auto-pickup: " + (autoPickupEnabled ? "enabled" : "disabled"));
             this.getLogger().info(TextFormat.GREEN + "[Config] Full inventory action: " + fullInventoryAction);
             this.getLogger().info(TextFormat.GREEN + "[Config] Console logging: enabled");
+            this.getLogger().info(TextFormat.GREEN + "[Config] Disabled worlds: " + disabledWorlds.size());
+            this.getLogger().info(TextFormat.GREEN + "[Config] Effects: " + (particlesEnabled || soundsEnabled ? "enabled" : "disabled"));
         }
+    }
+    
+    public void reloadConfiguration() {
+        loadConfig();
+        veinBlocks.clear();
+        loadVeinBlocks();
+    }
+    
+    public StatisticsTracker getStatsTracker() {
+        return statsTracker;
     }
     
     private void loadVeinBlocks() {
@@ -132,6 +186,21 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         Player player = event.getPlayer();
         Block block = event.getBlock();
         
+        // Check permission
+        if (!player.hasPermission("veinminer.use")) {
+            return;
+        }
+        
+        // Check if player has toggled vein mining off
+        if (veinMinerCommand != null && veinMinerCommand.isDisabled(player)) {
+            return;
+        }
+        
+        // Check if world is disabled
+        if (disabledWorlds.contains(player.getLevel().getName())) {
+            return;
+        }
+        
         // Check if player is sneaking (crouching)
         if (!player.isSneaking()) {
             return;
@@ -162,17 +231,32 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                     " | Block: " + blockId + " | Vein size: " + vein.size());
             }
             
+            // Record statistics
+            statsTracker.recordVeinMine(player, vein.size());
+            
             // Send message
             player.sendTip(TextFormat.GOLD + "Vein Mining: " + TextFormat.WHITE + vein.size() + " blocks");
             
             int itemsNotPickedUp = 0;
+            int totalXP = 0;
             boolean toolBroken = false;
             
             // Break all blocks in the vein (including the original)
             for (Block veinBlock : vein) {
                 
-                // Get drops
+                // Get drops (this respects Fortune/Silk Touch enchantments)
                 Item[] drops = veinBlock.getDrops(tool);
+                
+                // Get experience from block
+                int xp = veinBlock.getDropExp();
+                if (xp > 0) {
+                    totalXP += xp;
+                }
+                
+                // Show particle effect
+                if (particlesEnabled) {
+                    veinBlock.getLevel().addParticle(new cn.nukkit.level.particle.DestroyBlockParticle(veinBlock.add(0.5, 0.5, 0.5), veinBlock));
+                }
                 
                 // Handle item pickup
                 for (Item drop : drops) {
@@ -207,6 +291,16 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                 
                 // Break the block
                 veinBlock.getLevel().setBlock(veinBlock, Block.get("minecraft:air"), true, true);
+            }
+            
+            // Spawn experience orbs
+            if (totalXP > 0) {
+                player.getLevel().dropExpOrb(block, totalXP);
+            }
+            
+            // Play sound effect
+            if (soundsEnabled && !toolBroken) {
+                player.getLevel().addSound(player, Sound.RANDOM_LEVELUP, 1.0f, 1.5f);
             }
             
             // Send inventory full message if needed
@@ -331,5 +425,64 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
 
     private boolean isAxe(String toolId) {
         return toolId.contains("_axe");
+    }
+    
+    private void checkForUpdates() {
+        this.getServer().getScheduler().scheduleAsyncTask(this, new cn.nukkit.scheduler.AsyncTask() {
+            @Override
+            public void onRun() {
+                try {
+                    String currentVersion = getDescription().getVersion();
+                    String url = "https://api.github.com/repos/" + githubRepo + "/releases/latest";
+                    
+                    HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+                    connection.setRequestMethod("GET");
+                    connection.setRequestProperty("User-Agent", "VeinMiner-UpdateChecker");
+                    connection.setConnectTimeout(5000);
+                    connection.setReadTimeout(5000);
+                    
+                    int responseCode = connection.getResponseCode();
+                    if (responseCode == 200) {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                        StringBuilder response = new StringBuilder();
+                        String line;
+                        
+                        while ((line = reader.readLine()) != null) {
+                            response.append(line);
+                        }
+                        reader.close();
+                        
+                        // Simple JSON parsing for tag_name
+                        String jsonResponse = response.toString();
+                        int tagIndex = jsonResponse.indexOf("\"tag_name\"");
+                        if (tagIndex != -1) {
+                            int startQuote = jsonResponse.indexOf("\"", tagIndex + 11);
+                            int endQuote = jsonResponse.indexOf("\"", startQuote + 1);
+                            String latestVersion = jsonResponse.substring(startQuote + 1, endQuote).replace("v", "");
+                            
+                            if (!currentVersion.equals(latestVersion)) {
+                                getServer().getScheduler().scheduleTask(VeinMinerPlugin.this, () -> {
+                                    getLogger().warning(TextFormat.YELLOW + "===========================================");
+                                    getLogger().warning(TextFormat.YELLOW + "A new version of VeinMiner is available!");
+                                    getLogger().warning(TextFormat.YELLOW + "Current: " + TextFormat.RED + currentVersion + TextFormat.YELLOW + " | Latest: " + TextFormat.GREEN + latestVersion);
+                                    getLogger().warning(TextFormat.YELLOW + "Download: " + TextFormat.AQUA + "https://github.com/" + githubRepo + "/releases");
+                                    getLogger().warning(TextFormat.YELLOW + "===========================================");
+                                });
+                            } else {
+                                if (loggingEnabled) {
+                                    getServer().getScheduler().scheduleTask(VeinMinerPlugin.this, () -> {
+                                        getLogger().info(TextFormat.GREEN + "[Update] You are running the latest version!");
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    if (loggingEnabled) {
+                        getLogger().warning("Failed to check for updates: " + e.getMessage());
+                    }
+                }
+            }
+        });
     }
 }

@@ -1,9 +1,42 @@
 name: VeinMiner
 main: com.veinminer.VeinMinerPlugin
-version: "1.0.0"
+version: "1.0.2"
 api: "2.0.0"
 load: POSTWORLD
 author: Rep Graphics
 authors: ["Rep Graphics", "Euphoria Development"]
 description: Chain/vein mining plugin for PowerNukkitX
 website: https://github.com/powernukkitx
+
+commands:
+  veinminer:
+    description: VeinMiner main command
+    usage: "/veinminer <reload|stats|toggle>"
+    permission: veinminer.command
+    aliases: [vm]
+
+permissions:
+  veinminer.*:
+    description: All VeinMiner permissions
+    default: op
+    children:
+      veinminer.use: true
+      veinminer.command: true
+      veinminer.reload: true
+      veinminer.stats: true
+      veinminer.toggle: true
+  veinminer.use:
+    description: Allows using vein mining
+    default: true
+  veinminer.command:
+    description: Access to /veinminer command
+    default: true
+  veinminer.reload:
+    description: Reload plugin configuration
+    default: op
+  veinminer.stats:
+    description: View vein mining statistics
+    default: true
+  veinminer.toggle:
+    description: Toggle vein mining on/off
+    default: true
