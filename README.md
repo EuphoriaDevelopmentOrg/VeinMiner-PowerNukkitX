@@ -22,7 +22,7 @@ A powerful, feature-rich vein mining plugin for PowerNukkitX that allows players
 
 ## 📦 Installation
 
-1. Download `VeinMiner-1.0.2.jar` from [releases](https://github.com/YourUsername/VeinMiner/releases)
+1. Download `VeinMiner-1.0.2.jar` from [releases](https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX/releases)
 2. Place in your server's `plugins` folder
 3. Restart your server
 4. Configure `plugins/VeinMiner/config.yml` as needed
@@ -137,7 +137,7 @@ messages:
 ## 🔨 Building from Source
 
 ```bash
-git clone https://github.com/YourUsername/VeinMiner.git
+git clone https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX.git
 cd VeinMiner
 mvn clean package
 ```
@@ -187,9 +187,9 @@ This project is open source. Feel free to use and modify for your server.
 
 ## 💬 Support
 
-- Found a bug? [Open an issue](https://github.com/YourUsername/VeinMiner/issues)
-- Have a feature request? [Start a discussion](https://github.com/YourUsername/VeinMiner/discussions)
-- Need help? Check our [Wiki](https://github.com/YourUsername/VeinMiner/wiki)
+- Found a bug? [Open an issue](https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX/issues)
+- Have a feature request? [Start a discussion](https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX/discussions)
+- Need help? Check our [Wiki](https://github.com/EuphoriaDevelopmentOrg/VeinMiner-PowerNukkitX/wiki)
 
 ## 🌟 Star This Project
 
@@ -198,4 +198,3 @@ If you find VeinMiner useful, please consider giving it a star! It helps others 
 ---
 
 Made with ❤️ for the PowerNukkitX community
-
