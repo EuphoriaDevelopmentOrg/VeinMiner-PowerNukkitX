@@ -62,7 +62,7 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         
         // Fancy startup message
         this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
-        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + "VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.2 ⚯");
+        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + " VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.3 ⚯");
         this.getLogger().info(TextFormat.GREEN + "  ✓ Plugin Enabled Successfully!");
         this.getLogger().info(TextFormat.YELLOW + "  » Max blocks per vein: " + TextFormat.WHITE + MAX_BLOCKS);
         this.getLogger().info(TextFormat.YELLOW + "  » Auto-pickup: " + TextFormat.WHITE + (autoPickupEnabled ? "Enabled" : "Disabled"));
@@ -427,6 +427,29 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         return toolId.contains("_axe");
     }
     
+    private boolean isNewerVersion(String current, String latest) {
+        try {
+            String[] currentParts = current.split("\\.");
+            String[] latestParts = latest.split("\\.");
+            
+            int maxLength = Math.max(currentParts.length, latestParts.length);
+            
+            for (int i = 0; i < maxLength; i++) {
+                int currentPart = i < currentParts.length ? Integer.parseInt(currentParts[i]) : 0;
+                int latestPart = i < latestParts.length ? Integer.parseInt(latestParts[i]) : 0;
+                
+                if (latestPart > currentPart) {
+                    return true;
+                } else if (latestPart < currentPart) {
+                    return false;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
     private void checkForUpdates() {
         this.getServer().getScheduler().scheduleAsyncTask(this, new cn.nukkit.scheduler.AsyncTask() {
             @Override
@@ -458,13 +481,14 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                         if (tagIndex != -1) {
                             int startQuote = jsonResponse.indexOf("\"", tagIndex + 11);
                             int endQuote = jsonResponse.indexOf("\"", startQuote + 1);
-                            String latestVersion = jsonResponse.substring(startQuote + 1, endQuote).replace("v", "");
+                            String latestVersion = jsonResponse.substring(startQuote + 1, endQuote).replace("v", "").trim();
+                            String cleanCurrentVersion = currentVersion.trim();
                             
-                            if (!currentVersion.equals(latestVersion)) {
+                            if (isNewerVersion(cleanCurrentVersion, latestVersion)) {
                                 getServer().getScheduler().scheduleTask(VeinMinerPlugin.this, () -> {
                                     getLogger().warning(TextFormat.YELLOW + "===========================================");
                                     getLogger().warning(TextFormat.YELLOW + "A new version of VeinMiner is available!");
-                                    getLogger().warning(TextFormat.YELLOW + "Current: " + TextFormat.RED + currentVersion + TextFormat.YELLOW + " | Latest: " + TextFormat.GREEN + latestVersion);
+                                    getLogger().warning(TextFormat.YELLOW + "Current: " + TextFormat.RED + cleanCurrentVersion + TextFormat.YELLOW + " | Latest: " + TextFormat.GREEN + latestVersion);
                                     getLogger().warning(TextFormat.YELLOW + "Download: " + TextFormat.AQUA + "https://github.com/" + githubRepo + "/releases");
                                     getLogger().warning(TextFormat.YELLOW + "===========================================");
                                 });
