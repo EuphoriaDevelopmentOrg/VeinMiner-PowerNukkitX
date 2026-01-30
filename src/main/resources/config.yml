@@ -37,7 +37,7 @@ logging:
   # Log configuration loading details
   log-config-loading: true
 
-# Visual and sound effects
+# Visual and sound effectsI
 effects:
   # Show particle effects on mined blocks
   particles: true
@@ -50,6 +50,37 @@ statistics:
   enabled: true
   # Save stats to file
   save-to-file: true
+  # Milestone rewards system
+  milestones:
+    # Enable milestone rewards
+    enabled: true
+    # Milestone thresholds (blocks mined)
+    thresholds:
+      - 100
+      - 500
+      - 1000
+      - 5000
+      - 10000
+    # Rewards for each milestone (commands executed as console)
+    # Use {player} placeholder for player name
+    rewards:
+      "100":
+        - "give {player} diamond 1"
+        - "tell {player} You've earned a diamond for mining 100 blocks!"
+      "500":
+        - "give {player} diamond 5"
+        - "tell {player} You've earned 5 diamonds for mining 500 blocks!"
+      "1000":
+        - "give {player} diamond 10"
+        - "give {player} emerald 5"
+        - "tell {player} You've earned diamonds and emeralds for mining 1000 blocks!"
+      "5000":
+        - "give {player} diamond_block 5"
+        - "tell {player} You've earned diamond blocks for mining 5000 blocks!"
+      "10000":
+        - "give {player} diamond_block 10"
+        - "give {player} emerald_block 5"
+        - "tell {player} You've earned rare blocks for mining 10000 blocks!"
 
 # Update checker
 update-checker:
@@ -82,6 +113,7 @@ blocks:
   COPPER_ORE: true
   NETHER_GOLD_ORE: true
   ANCIENT_DEBRIS: true  # Netherite ancient debris
+  AMETHYST_CLUSTER: true  # Amethyst clusters
   
   # Deepslate variants
   DEEPSLATE_COAL_ORE: true

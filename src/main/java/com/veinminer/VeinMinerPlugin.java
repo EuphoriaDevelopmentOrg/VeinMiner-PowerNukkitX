@@ -7,7 +7,6 @@ import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.Listener;
 import cn.nukkit.event.block.BlockBreakEvent;
 import cn.nukkit.item.Item;
-import cn.nukkit.level.ParticleEffect;
 import cn.nukkit.level.Sound;
 import cn.nukkit.plugin.PluginBase;
 import cn.nukkit.utils.Config;
@@ -25,13 +24,13 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
     // Constants for magic numbers
     private static final int DEFAULT_MAX_BLOCKS = 64;
     private static final int NEIGHBOR_RANGE = 1; // -1 to 1 for 3x3x3 cube
-    private static final int NEIGHBOR_COUNT = 26; // 3x3x3 - 1 (center)
     private static final int UPDATE_CHECK_TIMEOUT = 5000;
     private static final double DEFAULT_DURABILITY_MULTIPLIER = 1.0;
     
     private int maxBlocks;
     private static final Set<String> VEIN_BLOCKS = new HashSet<>(); // Static cached blocks
     private static final Map<String, Boolean> TOOL_VALIDATION_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 1000; // Prevent unbounded cache growth
     
     private boolean autoPickupEnabled;
     private String fullInventoryAction;
@@ -79,16 +78,18 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         // Register events
         this.getServer().getPluginManager().registerEvents(this, this);
         
-        // Fancy startup message
-        this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
-        this.getLogger().info(TextFormat.GOLD + "  ⚯ " + TextFormat.BOLD + " VeinMiner" + TextFormat.RESET + TextFormat.GOLD + " v1.0.4 ⚯");
-        this.getLogger().info(TextFormat.GREEN + "  ✓ Plugin Enabled Successfully!");
-        this.getLogger().info(TextFormat.YELLOW + "  » Max blocks per vein: " + TextFormat.WHITE + maxBlocks);
-        this.getLogger().info(TextFormat.YELLOW + "  » Auto-pickup: " + TextFormat.WHITE + (autoPickupEnabled ? "Enabled" : "Disabled"));
-        this.getLogger().info(TextFormat.YELLOW + "  » Sneak required: " + TextFormat.WHITE + "Yes");
-        this.getLogger().info(TextFormat.YELLOW + "  » Vein blocks loaded: " + TextFormat.WHITE + VEIN_BLOCKS.size());
-        this.getLogger().info(TextFormat.YELLOW + "  » Durability multiplier: " + TextFormat.WHITE + durabilityMultiplier + "x");
-        this.getLogger().info(TextFormat.AQUA + "═══════════════════════════════════════");
+        // Schedule periodic cache cleanup (every 30 minutes)
+        this.getServer().getScheduler().scheduleDelayedRepeatingTask(this, () -> {
+            if (TOOL_VALIDATION_CACHE.size() > MAX_CACHE_SIZE) {
+                TOOL_VALIDATION_CACHE.clear();
+                if (loggingEnabled && logConfigLoading) {
+                    this.getLogger().info("[Cache] Tool validation cache cleared (size limit reached)");
+                }
+            }
+        }, 36000, 36000); // 30 minutes in ticks (30*60*20)
+        
+        // Startup message
+        this.getLogger().info("Plugin enabled (v1.0.4) - Max blocks: " + maxBlocks + ", Vein blocks: " + VEIN_BLOCKS.size());
         
         // Check for updates
         if (updateCheckerEnabled) {
@@ -252,6 +253,13 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         if (oresEnabled) {
             VEIN_BLOCKS.add("minecraft:ancient_debris");
         }
+        // Amethyst clusters
+        if (oresEnabled && isBlockEnabled("AMETHYST_CLUSTER")) {
+            VEIN_BLOCKS.add("minecraft:amethyst_cluster");
+            VEIN_BLOCKS.add("minecraft:large_amethyst_bud");
+            VEIN_BLOCKS.add("minecraft:medium_amethyst_bud");
+            VEIN_BLOCKS.add("minecraft:small_amethyst_bud");
+        }
         
         // Logs (natural tree logs only)
         if (logsEnabled && isBlockEnabled("LOG")) {
@@ -354,11 +362,21 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
             return;
         }
         
+        // SECURITY: Verify tool has enough durability BEFORE processing
+        int toolDurability = tool.getMaxDurability();
+        if (toolDurability > 0) {
+            int remainingDurability = toolDurability - tool.getDamage();
+            if (remainingDurability <= 0) {
+                return; // Tool is already broken
+            }
+        }
+        
         try {
             // Find all connected blocks of the same type
             Set<Block> vein = findVein(block);
             
-            if (vein.size() > 1) {
+            // SECURITY: Strictly enforce maxBlocks limit
+            if (vein != null && vein.size() > 1 && vein.size() <= maxBlocks) {
                 // Cancel the event to prevent normal drop behavior
                 event.setCancelled(true);
                 
@@ -396,8 +414,21 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         boolean toolBroken = false;
         int blocksMined = 0;
         
+        // Calculate max blocks we can mine with remaining durability
+        int maxMinableBlocks = vein.size();
+        if (tool.getMaxDurability() > 0) {
+            int remainingDurability = tool.getMaxDurability() - tool.getDamage();
+            int durabilityPerBlock = Math.max(1, (int) Math.round(durabilityMultiplier));
+            maxMinableBlocks = Math.min(vein.size(), remainingDurability / durabilityPerBlock);
+        }
+        
         // Break all blocks in the vein (including the original)
         for (Block veinBlock : vein) {
+            // SECURITY: Stop if we've reached durability limit
+            if (blocksMined >= maxMinableBlocks) {
+                break;
+            }
+            
             // Check if tool is broken before processing each block
             if (tool.getMaxDurability() > 0 && tool.getDamage() >= tool.getMaxDurability()) {
                 toolBroken = true;
@@ -406,9 +437,14 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
             
             // Process block drops and effects
             Map<String, Object> result = processBlockBreak(player, veinBlock, tool);
-            itemsNotPickedUp += (int) result.get("itemsNotPickedUp");
-            totalXP += (int) result.get("xp");
-            blocksMined++;
+            boolean blockActuallyBroken = (boolean) result.get("success");
+            
+            // SECURITY: Only count XP and items if block was actually broken
+            if (blockActuallyBroken) {
+                itemsNotPickedUp += (int) result.get("itemsNotPickedUp");
+                totalXP += (int) result.get("xp");
+                blocksMined++;
+            }
             
             // Apply tool durability with multiplier
             if (tool.getMaxDurability() > 0) {
@@ -418,6 +454,8 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                 // Check if tool broke
                 if (tool.getDamage() >= tool.getMaxDurability()) {
                     player.getInventory().setItemInHand(Item.get("minecraft:air"));
+                    // Send slot update to prevent network issues
+                    player.getInventory().sendSlot(player.getInventory().getHeldItemIndex(), player);
                     player.getLevel().addSound(player, Sound.RANDOM_BREAK);
                     toolBroken = true;
                     break;
@@ -449,6 +487,8 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         // Update tool in inventory if not broken
         if (!toolBroken && tool.getMaxDurability() > 0) {
             player.getInventory().setItemInHand(tool);
+            // Send slot update to prevent network ID mismatch
+            player.getInventory().sendSlot(player.getInventory().getHeldItemIndex(), player);
         }
     }
     
@@ -462,13 +502,20 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
     private Map<String, Object> processBlockBreak(Player player, Block veinBlock, Item tool) {
         int itemsNotPickedUp = 0;
         int xp = 0;
+        boolean success = false;
         
         try {
+            // SECURITY: Verify block still exists and hasn't been modified
+            if (veinBlock == null || veinBlock.getLevel() == null) {
+                Map<String, Object> result = new HashMap<>(3);
+                result.put("itemsNotPickedUp", 0);
+                result.put("xp", 0);
+                result.put("success", false);
+                return result;
+            }
+            
             // Get drops (this respects Fortune/Silk Touch enchantments)
             Item[] drops = veinBlock.getDrops(tool);
-            
-            // Get experience from block
-            xp = veinBlock.getDropExp();
             
             // Show particle effect
             if (particlesEnabled) {
@@ -480,15 +527,23 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
             itemsNotPickedUp = handleItemDrops(player, veinBlock, drops);
             
             // Break the block
-            veinBlock.getLevel().setBlock(veinBlock, Block.get("minecraft:air"), true, true);
+            boolean blockBroken = veinBlock.getLevel().setBlock(veinBlock, Block.get("minecraft:air"), true, true);
+            
+            // SECURITY: Only grant XP if block was actually broken
+            if (blockBroken) {
+                xp = veinBlock.getDropExp();
+                success = true;
+            }
             
         } catch (Exception e) {
             this.getLogger().warning("Error processing block break at " + veinBlock.getLocation() + ": " + e.getMessage());
         }
         
-        Map<String, Object> result = new HashMap<>();
+        // Use initial capacity for better performance
+        Map<String, Object> result = new HashMap<>(3);
         result.put("itemsNotPickedUp", itemsNotPickedUp);
         result.put("xp", xp);
+        result.put("success", success);
         return result;
     }
     
@@ -501,8 +556,19 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
      */
     private int handleItemDrops(Player player, Block block, Item[] drops) {
         int itemsNotPickedUp = 0;
+        boolean inventoryChanged = false;
+        
+        // Check if drops array is null or empty
+        if (drops == null || drops.length == 0) {
+            return 0;
+        }
         
         for (Item drop : drops) {
+            // Skip null items
+            if (drop == null || drop.isNull()) {
+                continue;
+            }
+            
             if (autoPickupEnabled) {
                 // Try to add to inventory
                 if (!player.getInventory().canAddItem(drop)) {
@@ -513,12 +579,29 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                     // If "delete", just don't add it anywhere
                     itemsNotPickedUp++;
                 } else {
-                    player.getInventory().addItem(drop);
+                    // Add item and track if inventory changed
+                    Item[] notAdded = player.getInventory().addItem(drop);
+                    if (notAdded.length > 0) {
+                        // Some items couldn't be added, drop them
+                        for (Item leftover : notAdded) {
+                            if (fullInventoryAction.equals("drop")) {
+                                block.getLevel().dropItem(block, leftover);
+                            }
+                            itemsNotPickedUp++;
+                        }
+                    } else {
+                        inventoryChanged = true;
+                    }
                 }
             } else {
                 // Drop to ground if auto-pickup is disabled
                 block.getLevel().dropItem(block, drop);
             }
+        }
+        
+        // Send inventory update once at the end, not for every item
+        if (inventoryChanged) {
+            player.getInventory().sendContents(player);
         }
         
         return itemsNotPickedUp;
@@ -552,7 +635,7 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
      * @return Set of blocks in the vein
      */
     private Set<Block> findVein(Block startBlock) {
-        if (startBlock == null) {
+        if (startBlock == null || startBlock.getLevel() == null) {
             return Collections.emptySet();
         }
         
@@ -562,6 +645,10 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         queue.add(startBlock);
         
         String blockId = startBlock.getId();
+        cn.nukkit.level.Level level = startBlock.getLevel();
+        
+        // PERFORMANCE: Pre-allocate StringBuilder for position keys
+        StringBuilder posKeyBuilder = new StringBuilder(16);
         
         while (!queue.isEmpty() && vein.size() < maxBlocks) {
             Block current = queue.poll();
@@ -570,7 +657,13 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                 continue;
             }
             
-            String posKey = current.getFloorX() + "," + current.getFloorY() + "," + current.getFloorZ();
+            int cx = current.getFloorX();
+            int cy = current.getFloorY();
+            int cz = current.getFloorZ();
+            
+            // PERFORMANCE: Reuse StringBuilder for position keys
+            posKeyBuilder.setLength(0);
+            String posKey = posKeyBuilder.append(cx).append(',').append(cy).append(',').append(cz).toString();
             
             if (visitedPositions.contains(posKey)) {
                 continue;
@@ -584,6 +677,11 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
             vein.add(current);
             visitedPositions.add(posKey);
             
+            // SECURITY: Hard limit check to prevent infinite loops
+            if (vein.size() >= maxBlocks) {
+                break;
+            }
+            
             // Check all 26 surrounding blocks (including diagonals) in a 3x3x3 cube
             for (int dx = -NEIGHBOR_RANGE; dx <= NEIGHBOR_RANGE; dx++) {
                 for (int dy = -NEIGHBOR_RANGE; dy <= NEIGHBOR_RANGE; dy++) {
@@ -593,19 +691,29 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                             continue;
                         }
                         
-                        int nx = current.getFloorX() + dx;
-                        int ny = current.getFloorY() + dy;
-                        int nz = current.getFloorZ() + dz;
-                        String neighborPosKey = nx + "," + ny + "," + nz;
+                        int nx = cx + dx;
+                        int ny = cy + dy;
+                        int nz = cz + dz;
+                        
+                        // PERFORMANCE: Reuse StringBuilder
+                        posKeyBuilder.setLength(0);
+                        String neighborPosKey = posKeyBuilder.append(nx).append(',').append(ny).append(',').append(nz).toString();
                         
                         if (visitedPositions.contains(neighborPosKey)) {
                             continue;
                         }
                         
+                        // SECURITY: Prevent queue from growing too large
+                        if (queue.size() > maxBlocks * 2) {
+                            continue;
+                        }
+                        
                         try {
-                            Block neighbor = current.getLevel().getBlock(nx, ny, nz);
-                            if (neighbor != null && neighbor.getId().equals(blockId)) {
+                            // PERFORMANCE: Direct block ID check without creating full Block object when possible
+                            Block neighbor = level.getBlock(nx, ny, nz);
+                            if (neighbor != null && blockId.equals(neighbor.getId())) {
                                 queue.add(neighbor);
+                                visitedPositions.add(neighborPosKey); // Mark as visited immediately
                             }
                         } catch (Exception e) {
                             // Skip invalid blocks
@@ -631,7 +739,9 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         }
         
         String toolId = tool.getId();
-        String cacheKey = blockId + ":" + toolId;
+        // Use StringBuilder for better performance with concatenation
+        String cacheKey = new StringBuilder(blockId.length() + toolId.length() + 1)
+            .append(blockId).append(':').append(toolId).toString();
         
         // Check cache first
         Boolean cached = TOOL_VALIDATION_CACHE.get(cacheKey);
@@ -741,7 +851,9 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                     String currentVersion = getDescription().getVersion();
                     String url = "https://api.github.com/repos/" + githubRepo + "/releases/latest";
                     
-                    connection = (HttpURLConnection) new URL(url).openConnection();
+                    @SuppressWarnings("deprecation")
+                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                    connection = conn;
                     connection.setRequestMethod("GET");
                     connection.setRequestProperty("User-Agent", "VeinMiner-UpdateChecker");
                     connection.setConnectTimeout(UPDATE_CHECK_TIMEOUT);

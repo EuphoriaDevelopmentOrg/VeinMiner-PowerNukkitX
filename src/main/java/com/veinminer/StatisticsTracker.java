@@ -16,19 +16,35 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class StatisticsTracker {
     
+    // Logging tag
+    private static final String LOG_TAG = "[VeinMiner] ";
+    
     private final VeinMinerPlugin plugin;
     private final Map<UUID, PlayerStats> playerStats;
     private final boolean enabled;
     private final boolean saveToFile;
     private volatile boolean saving = false;
     
+    // Milestone tracking
+    private final Map<UUID, Set<Integer>> achievedMilestones;
+    private final boolean milestonesEnabled;
+    private final List<Integer> milestoneThresholds;
+    
     public StatisticsTracker(VeinMinerPlugin plugin) {
         this.plugin = plugin;
         this.playerStats = new ConcurrentHashMap<>();
+        this.achievedMilestones = new ConcurrentHashMap<>();
         
         Config config = plugin.getConfig();
         this.enabled = config.getBoolean("statistics.enabled", true);
         this.saveToFile = config.getBoolean("statistics.save-to-file", true);
+        this.milestonesEnabled = config.getBoolean("statistics.milestones.enabled", true);
+        this.milestoneThresholds = config.getIntegerList("statistics.milestones.thresholds");
+        
+        // Default milestones if not configured
+        if (milestoneThresholds.isEmpty()) {
+            milestoneThresholds.addAll(Arrays.asList(100, 500, 1000, 5000, 10000));
+        }
         
         if (enabled && saveToFile) {
             loadStats();
@@ -46,10 +62,158 @@ public class StatisticsTracker {
         UUID uuid = player.getUniqueId();
         PlayerStats stats = playerStats.computeIfAbsent(uuid, k -> new PlayerStats(player.getName()));
         
+        // Ensure milestones are loaded for this player (lazy loading)
+        ensureMilestonesLoaded(uuid);
+        
+        int previousBlocks = stats.getTotalBlocks();
         stats.incrementVeins();
         stats.addBlocks(blockCount);
         stats.updateLastMined();
         stats.updateLargestVein(blockCount);
+        
+        // Check milestones (only check once per player session to prevent resending)
+        if (milestonesEnabled) {
+            checkMilestones(player, previousBlocks, stats.getTotalBlocks());
+        }
+    }
+    
+    /**
+     * Sanitize player name to prevent command injection
+     * @param playerName The player name to sanitize
+     * @return Sanitized player name
+     */
+    private String sanitizePlayerName(String playerName) {
+        if (playerName == null) {
+            return "Unknown";
+        }
+        // SECURITY: Remove potentially dangerous characters that could be used for command injection
+        // Allow only alphanumeric, underscore, and hyphen (standard Minecraft username characters)
+        return playerName.replaceAll("[^a-zA-Z0-9_-]", "");
+    }
+    
+    /**
+     * Check if player has reached any milestones
+     * @param player The player
+     * @param previousTotal Previous total blocks
+     * @param currentTotal Current total blocks
+     */
+    private void checkMilestones(Player player, int previousTotal, int currentTotal) {
+        UUID uuid = player.getUniqueId();
+        Set<Integer> achieved = achievedMilestones.computeIfAbsent(uuid, k -> ConcurrentHashMap.newKeySet());
+        
+        for (Integer threshold : milestoneThresholds) {
+            // If milestone crossed and not already achieved
+            if (currentTotal >= threshold && previousTotal < threshold) {
+                // Use add() with thread-safe set - returns false if already present
+                if (achieved.add(threshold)) {
+                    grantMilestoneReward(player, threshold);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Ensure player milestones are loaded from file (lazy loading)
+     * @param uuid Player UUID
+     */
+    private void ensureMilestonesLoaded(UUID uuid) {
+        // If milestones already loaded for this player, skip
+        if (achievedMilestones.containsKey(uuid)) {
+            return;
+        }
+        
+        // Try to load from file
+        if (!saveToFile) {
+            return;
+        }
+        
+        try {
+            File statsFile = new File(plugin.getDataFolder(), "stats.yml");
+            if (!statsFile.exists()) {
+                return;
+            }
+            
+            Config statsConfig = new Config(statsFile, Config.YAML);
+            String uuidStr = uuid.toString();
+            
+            if (statsConfig.exists(uuidStr)) {
+                Map<String, Object> data = statsConfig.getSection(uuidStr).getAllMap();
+                
+                if (data.containsKey("milestones")) {
+                    List<?> milestonesData = (List<?>) data.get("milestones");
+                    Set<Integer> milestones = ConcurrentHashMap.newKeySet();
+                    for (Object obj : milestonesData) {
+                        if (obj instanceof Number) {
+                            milestones.add(((Number) obj).intValue());
+                        }
+                    }
+                    if (!milestones.isEmpty()) {
+                        achievedMilestones.put(uuid, milestones);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Silently fail - player will start with no milestones
+        }
+    }
+    
+    /**
+     * Grant milestone reward to player
+     * @param player The player
+     * @param milestone The milestone threshold reached
+     */
+    private void grantMilestoneReward(Player player, int milestone) {
+        // SECURITY: Enhanced null and online checks
+        if (player == null) {
+            return;
+        }
+        
+        // Double-check player is still online before granting rewards
+        if (!player.isOnline() || !player.isConnected()) {
+            return;
+        }
+        
+        Config config = plugin.getConfig();
+        
+        // Send congratulatory message
+        player.sendMessage(TextFormat.GOLD + "" + TextFormat.BOLD + "═══════════════════════════════");
+        player.sendMessage(TextFormat.GREEN + "" + TextFormat.BOLD + "⚡ MILESTONE REACHED! ⚡");
+        player.sendMessage(TextFormat.YELLOW + "You've mined " + TextFormat.WHITE + milestone + TextFormat.YELLOW + " blocks with VeinMiner!");
+        
+        // Grant rewards if configured
+        if (config.exists("statistics.milestones.rewards." + milestone)) {
+            List<String> commands = config.getStringList("statistics.milestones.rewards." + milestone);
+            int successfulCommands = 0;
+            for (String command : commands) {
+                try {
+                    // SECURITY: Sanitize player name to prevent command injection
+                    String sanitizedPlayerName = sanitizePlayerName(player.getName());
+                    
+                    // Replace placeholders with sanitized values
+                    String processedCommand = command.replace("{player}", sanitizedPlayerName);
+                    
+                    if (processedCommand != null && !processedCommand.trim().isEmpty()) {
+                        // Verify player is still online before executing
+                        if (player.isOnline() && player.isConnected()) {
+                            plugin.getServer().executeCommand(plugin.getServer().getConsoleSender(), processedCommand);
+                            successfulCommands++;
+                        }
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning(LOG_TAG + "Failed to execute milestone reward command: " + command + " - " + e.getMessage());
+                }
+            }
+            if (successfulCommands > 0 && player.isOnline()) {
+                player.sendMessage(TextFormat.AQUA + "✓ Milestone rewards granted!");
+            }
+        }
+        
+        player.sendMessage(TextFormat.GOLD + "" + TextFormat.BOLD + "═══════════════════════════════");
+        
+        // Log milestone
+        if (plugin.getConfig().getBoolean("logging.enabled", true)) {
+            plugin.getLogger().info(LOG_TAG + TextFormat.GREEN + "[Milestone] Player " + player.getName() + " reached " + milestone + " blocks mined!");
+        }
     }
     
     /**
@@ -114,12 +278,23 @@ public class StatisticsTracker {
                 data.put("largestVein", stats.getLargestVein());
                 data.put("lastMined", stats.getLastMined());
                 
+                // STABILITY: Save achieved milestones with proper synchronization
+                Set<Integer> milestones = achievedMilestones.get(entry.getKey());
+                if (milestones != null && !milestones.isEmpty()) {
+                    // Create defensive copy in synchronized block to prevent concurrent modification
+                    List<Integer> milestonesCopy;
+                    synchronized (achievedMilestones) {
+                        milestonesCopy = new ArrayList<>(milestones);
+                    }
+                    data.put("milestones", milestonesCopy);
+                }
+                
                 statsConfig.set(uuidStr, data);
             }
             
             statsConfig.save();
         } catch (Exception e) {
-            plugin.getLogger().warning("Failed to save statistics: " + e.getMessage());
+            plugin.getLogger().warning(LOG_TAG + "Failed to save statistics: " + e.getMessage());
         } finally {
             saving = false;
         }
@@ -147,12 +322,26 @@ public class StatisticsTracker {
                     stats.setLastMined(((Number) data.getOrDefault("lastMined", 0L)).longValue());
                     
                     playerStats.put(uuid, stats);
+                    
+                    // Load achieved milestones
+                    if (data.containsKey("milestones")) {
+                        List<?> milestonesData = (List<?>) data.get("milestones");
+                        Set<Integer> milestones = ConcurrentHashMap.newKeySet();
+                        for (Object obj : milestonesData) {
+                            if (obj instanceof Number) {
+                                milestones.add(((Number) obj).intValue());
+                            }
+                        }
+                        if (!milestones.isEmpty()) {
+                            achievedMilestones.put(uuid, milestones);
+                        }
+                    }
                 } catch (Exception e) {
-                    plugin.getLogger().warning("Failed to load stats for " + uuidStr);
+                    plugin.getLogger().warning(LOG_TAG + "Failed to load stats for " + uuidStr);
                 }
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("Failed to load statistics file: " + e.getMessage());
+            plugin.getLogger().warning(LOG_TAG + "Failed to load statistics file: " + e.getMessage());
         }
     }
     

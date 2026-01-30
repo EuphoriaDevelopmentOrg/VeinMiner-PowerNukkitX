@@ -11,7 +11,6 @@ import cn.nukkit.event.player.PlayerQuitEvent;
 import cn.nukkit.utils.TextFormat;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -22,6 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Implements Listener to clean up player data on quit (prevents memory leaks)
  */
 public class VeinMinerCommand extends Command implements Listener {
+    
+    // Logging tag
+    private static final String LOG_TAG = "[VeinMiner] ";
     
     private final VeinMinerPlugin plugin;
     private final Set<UUID> disabledPlayers;
@@ -227,12 +229,12 @@ public class VeinMinerCommand extends Command implements Listener {
                     return true;
             }
         } catch (Exception e) {
-            plugin.getLogger().error("Error executing command: " + e.getMessage());
+            plugin.getLogger().error(LOG_TAG + "Error executing command: " + e.getMessage());
             e.printStackTrace();
             try {
                 sender.sendMessage(TextFormat.RED + "An error occurred: " + e.getMessage());
             } catch (Exception ex) {
-                plugin.getLogger().error("Error sending error message: " + ex.getMessage());
+                plugin.getLogger().error(LOG_TAG + "Error sending error message: " + ex.getMessage());
             }
             return true;
         }
