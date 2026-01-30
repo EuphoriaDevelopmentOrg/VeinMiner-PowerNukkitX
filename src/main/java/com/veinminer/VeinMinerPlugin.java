@@ -713,7 +713,6 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
                             Block neighbor = level.getBlock(nx, ny, nz);
                             if (neighbor != null && blockId.equals(neighbor.getId())) {
                                 queue.add(neighbor);
-                                visitedPositions.add(neighborPosKey); // Mark as visited immediately
                             }
                         } catch (Exception e) {
                             // Skip invalid blocks
