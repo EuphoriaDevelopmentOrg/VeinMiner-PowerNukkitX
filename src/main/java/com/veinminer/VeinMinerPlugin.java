@@ -89,7 +89,7 @@ public class VeinMinerPlugin extends PluginBase implements Listener {
         }, 36000, 36000); // 30 minutes in ticks (30*60*20)
         
         // Startup message
-        this.getLogger().info("Plugin enabled (v1.0.4) - Max blocks: " + maxBlocks + ", Vein blocks: " + VEIN_BLOCKS.size());
+        this.getLogger().info("Plugin enabled (v" + getDescription().getVersion() + ") - Max blocks: " + maxBlocks + ", Vein blocks: " + VEIN_BLOCKS.size());
         
         // Check for updates
         if (updateCheckerEnabled) {
